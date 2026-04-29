@@ -46,25 +46,47 @@ body {
 
 .login-cards {
   display: flex;
-  gap: 24px;
+  gap: 20px;
   flex-wrap: wrap;
   justify-content: center;
   width: 100%;
-  max-width: 740px;
+  max-width: 900px;
 }
 
 .login-card {
   background: var(--card);
   border: 2px solid var(--border);
   border-radius: 14px;
-  padding: 36px 32px;
+  padding: 32px 28px;
   flex: 1;
-  min-width: 290px;
-  max-width: 340px;
+  min-width: 260px;
+  max-width: 310px;
 }
 
-.login-card h2 { font-size: 22px; font-weight: 600; margin-bottom: 10px; }
-.login-card p { color: var(--muted); font-size: 15px; margin-bottom: 22px; line-height: 1.5; }
+.login-card h2 { font-size: 21px; font-weight: 600; margin-bottom: 10px; }
+.login-card p { color: var(--muted); font-size: 15px; margin-bottom: 18px; line-height: 1.5; }
+
+.login-add-card {
+  background: var(--card);
+  border: 2px dashed var(--border);
+  border-radius: 14px;
+  padding: 32px 28px;
+  flex: 1;
+  min-width: 200px;
+  max-width: 240px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.login-add-card:hover { border-color: var(--blue); }
+
+.login-combined-row {
+  margin-top: 24px;
+  display: none;
+  text-align: center;
+}
 
 .login-error { color: var(--red); font-size: 14px; min-height: 20px; margin-bottom: 6px; }
 
@@ -416,25 +438,9 @@ tr:hover td { background: #FAFAFA; }
 <div id="login-screen">
   <div class="login-heading">My Finance</div>
   <div class="login-sub">Your personal money tracker</div>
-
-  <div class="login-cards">
-    <div class="login-card">
-      <h2>Demo Account</h2>
-      <p>Explore the app with realistic sample data — three accounts, three months of history. No password needed.</p>
-      <button class="btn btn-primary" onclick="loginDemo()">Open Demo</button>
-      <div style="margin-top:14px;text-align:center;">
-        <button class="btn btn-sm btn-outline" onclick="resetDemo(false)">Reset Demo Data</button>
-      </div>
-    </div>
-
-    <div class="login-card">
-      <h2>My Account</h2>
-      <p>Your private finance data. Protected with a password so casual visitors can't peek.</p>
-      <div class="login-error" id="login-error"></div>
-      <input type="password" class="form-input" id="pw-input" placeholder="Password (default: 123)"
-        onkeydown="if(event.key==='Enter')loginUser()" style="margin-bottom:12px;">
-      <button class="btn btn-primary" onclick="loginUser()">Open My Account</button>
-    </div>
+  <div id="login-cards" class="login-cards"></div>
+  <div id="login-combined-row" class="login-combined-row">
+    <button class="btn btn-outline" onclick="openCombined()">Combined View — see all accounts together</button>
   </div>
 </div>
 
@@ -475,13 +481,13 @@ tr:hover td { background: #FAFAFA; }
 // ════════════════════════════════════════════════════════════
 // CONSTANTS & STATE
 // ════════════════════════════════════════════════════════════
-const DEMO_KEY  = 'mf_demo_v2';
-const USER_KEY  = 'mf_user_v2';
-const CURRENCIES = ['PLN', 'EUR', 'USD', 'DKK'];
-const MONTH_NAMES = ['January','February','March','April','May','June',
-                     'July','August','September','October','November','December'];
+const DEMO_KEY     = 'mf_demo_v2';
+const PROFILES_KEY = 'mf_profiles_v1';
+const CURRENCIES   = ['PLN', 'EUR', 'USD', 'DKK'];
+const MONTH_NAMES  = ['January','February','March','April','May','June',
+                      'July','August','September','October','November','December'];
 
-let currentUser  = null;  // 'demo' | 'user'
+let currentUser  = null;  // 'demo' | profileId | 'combined'
 let currentTab   = 'overview';
 let currentMonth = ymNow();
 let nwChart      = null;
@@ -547,9 +553,40 @@ function toBase(amount, fromCur, data) {
 }
 
 // ════════════════════════════════════════════════════════════
+// PROFILES
+// ════════════════════════════════════════════════════════════
+function profileKey(id) { return `mf_profile_v1_${id}`; }
+
+function getProfiles() {
+  const raw = localStorage.getItem(PROFILES_KEY);
+  if (raw) return JSON.parse(raw);
+  // Migration: if old single-user data exists, wrap it in a profile
+  const oldRaw = localStorage.getItem('mf_user_v2');
+  if (oldRaw) {
+    const id = 'p_' + Math.random().toString(36).slice(2,8);
+    const profiles = [{ id, name: 'My Account' }];
+    localStorage.setItem(profileKey(id), oldRaw);
+    localStorage.setItem(PROFILES_KEY, JSON.stringify(profiles));
+    return profiles;
+  }
+  return [];
+}
+
+function saveProfiles(profiles) {
+  localStorage.setItem(PROFILES_KEY, JSON.stringify(profiles));
+}
+
+function getProfileData(id) {
+  const raw = localStorage.getItem(profileKey(id));
+  if (!raw) { const d = defaultData(); localStorage.setItem(profileKey(id), JSON.stringify(d)); return d; }
+  try { return JSON.parse(raw); }
+  catch(e) { return defaultData(); }
+}
+
+// ════════════════════════════════════════════════════════════
 // DATA ACCESS
 // ════════════════════════════════════════════════════════════
-function storageKey() { return currentUser === 'demo' ? DEMO_KEY : USER_KEY; }
+function storageKey() { return currentUser === 'demo' ? DEMO_KEY : profileKey(currentUser); }
 
 function getData() {
   const raw = localStorage.getItem(storageKey());
@@ -668,25 +705,98 @@ function buildDemoData() {
 // ════════════════════════════════════════════════════════════
 // LOGIN / LOGOUT
 // ════════════════════════════════════════════════════════════
+function renderLogin() {
+  const profiles = getProfiles();
+  let html = `
+    <div class="login-card">
+      <h2>Demo Account</h2>
+      <p>Explore with realistic sample data. No password needed.</p>
+      <button class="btn btn-primary" onclick="loginDemo()">Open Demo</button>
+      <div style="margin-top:12px;text-align:center;">
+        <button class="btn btn-sm btn-outline" onclick="resetDemo(false)">Reset Demo Data</button>
+      </div>
+    </div>`;
+
+  profiles.forEach(p => {
+    html += `
+      <div class="login-card">
+        <h2>${esc(p.name)}</h2>
+        <p>Personal account, password protected.</p>
+        <div class="login-error" id="err-${p.id}"></div>
+        <input type="password" class="form-input" id="pw-${p.id}"
+          placeholder="Password" style="margin-bottom:12px;"
+          onkeydown="if(event.key==='Enter')loginProfile('${p.id}')">
+        <button class="btn btn-primary" onclick="loginProfile('${p.id}')">Open</button>
+      </div>`;
+  });
+
+  html += `
+    <div class="login-add-card" onclick="addProfile()">
+      <div style="text-align:center;">
+        <div style="font-size:34px;color:var(--muted);line-height:1;margin-bottom:8px;">+</div>
+        <div style="font-weight:500;color:var(--muted);font-size:16px;">Add Account</div>
+        <div style="font-size:13px;color:var(--light);margin-top:4px;">Create a personal account</div>
+      </div>
+    </div>`;
+
+  document.getElementById('login-cards').innerHTML = html;
+  document.getElementById('login-combined-row').style.display = profiles.length >= 2 ? 'block' : 'none';
+}
+
 function loginDemo() {
   currentUser = 'demo';
-  getData(); // init if needed
+  getData();
   currentMonth = ymNow();
   showApp();
 }
 
-function loginUser() {
-  const entered = document.getElementById('pw-input').value;
-  const raw = localStorage.getItem(USER_KEY);
-  const pw = raw ? (JSON.parse(raw).password || '123') : '123';
+function loginProfile(id) {
+  const entered  = document.getElementById(`pw-${id}`).value;
+  const raw      = localStorage.getItem(profileKey(id));
+  const pw       = raw ? (JSON.parse(raw).password || '123') : '123';
   if (entered === pw) {
-    currentUser = 'user';
+    currentUser = id;
     currentMonth = ymNow();
     showApp();
   } else {
-    document.getElementById('login-error').textContent = 'Wrong password. Default is "123".';
-    document.getElementById('pw-input').value = '';
+    document.getElementById(`err-${id}`).textContent = 'Wrong password.';
+    document.getElementById(`pw-${id}`).value = '';
   }
+}
+
+function openCombined() {
+  currentUser  = 'combined';
+  currentMonth = ymNow();
+  showApp();
+}
+
+function addProfile() {
+  openModal('Add Account', `
+    <div class="form-group">
+      <label class="form-label">Account Name</label>
+      <input type="text" class="form-input" id="np-name" placeholder="e.g. My Account, Husband's Account">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Password</label>
+      <input type="password" class="form-input" id="np-pw" placeholder="Choose a password">
+    </div>`,
+  [
+    { label: 'Cancel', cls: 'btn-secondary', fn: closeModal },
+    { label: 'Create', cls: 'btn-primary',   fn: () => {
+      const name = document.getElementById('np-name').value.trim();
+      const pw   = document.getElementById('np-pw').value;
+      if (!name) { alert('Please enter a name.'); return; }
+      if (!pw)   { alert('Please set a password.'); return; }
+      const id = 'p_' + uid();
+      const profiles = getProfiles();
+      profiles.push({ id, name });
+      saveProfiles(profiles);
+      const d = defaultData(); d.password = pw;
+      localStorage.setItem(profileKey(id), JSON.stringify(d));
+      closeModal();
+      renderLogin();
+    }}
+  ]);
 }
 
 function resetDemo(fromLogin) {
@@ -703,9 +813,9 @@ function logout() {
   currentUser = null;
   document.getElementById('app').style.display = 'none';
   document.getElementById('login-screen').style.display = 'flex';
-  document.getElementById('pw-input').value = '';
-  document.getElementById('login-error').textContent = '';
+  document.getElementById('tb-settings').style.display = '';
   currentTab = 'overview';
+  renderLogin();
 }
 
 function showApp() {
@@ -713,8 +823,18 @@ function showApp() {
   const app = document.getElementById('app');
   app.style.display = 'flex';
   app.style.flexDirection = 'column';
-  document.getElementById('user-badge').textContent =
-    currentUser === 'demo' ? 'Demo Account' : 'My Account';
+
+  if (currentUser === 'demo') {
+    document.getElementById('user-badge').textContent = 'Demo Account';
+    document.getElementById('tb-settings').style.display = '';
+  } else if (currentUser === 'combined') {
+    document.getElementById('user-badge').textContent = 'Combined View';
+    document.getElementById('tb-settings').style.display = 'none';
+  } else {
+    const p = getProfiles().find(p => p.id === currentUser);
+    document.getElementById('user-badge').textContent = p ? p.name : 'My Account';
+    document.getElementById('tb-settings').style.display = '';
+  }
   switchTab('overview');
 }
 
@@ -759,6 +879,7 @@ function calcMonth(data, ym) {
 }
 
 function renderOverview() {
+  if (currentUser === 'combined') { renderCombinedOverview(); return; }
   const data = getData();
   const base = data.baseCurrency || 'PLN';
   const cur  = calcMonth(data, currentMonth);
@@ -908,6 +1029,7 @@ function goOv(d) { currentMonth = d<0 ? prevYM(currentMonth) : nextYM(currentMon
 // NET WORTH TAB
 // ════════════════════════════════════════════════════════════
 function renderNetWorth() {
+  if (currentUser === 'combined') { renderCombinedNetWorth(); return; }
   const data  = getData();
   const base  = data.baseCurrency || 'PLN';
   const md    = monthSlot(data, currentMonth);
@@ -1061,6 +1183,7 @@ function editNetWorth() {
 // HISTORY TAB
 // ════════════════════════════════════════════════════════════
 function renderHistory() {
+  if (currentUser === 'combined') { renderCombinedHistory(); return; }
   const data = getData();
   const base = data.baseCurrency || 'PLN';
   const yms  = Object.keys(data.monthlyData||{}).sort().reverse();
@@ -1275,12 +1398,26 @@ function renderSettings() {
       }
     </div>
 
+    <!-- This Account -->
     ${currentUser === 'demo' ? `
       <div class="card">
         <div class="card-title">Demo Account</div>
         <p style="color:var(--muted);margin-bottom:14px;">Restore all demo data to the original sample.</p>
         <button class="btn btn-danger" style="width:auto" onclick="resetDemo(false)">Reset Demo Data</button>
-      </div>` : ''}
+      </div>` : `
+      <div class="card">
+        <div class="card-title">This Account</div>
+        <div class="form-group">
+          <label class="form-label">Account Name</label>
+          <div style="display:flex;gap:10px;align-items:center;">
+            <span style="font-size:17px;font-weight:500;">${esc((getProfiles().find(p=>p.id===currentUser)||{}).name||'')}</span>
+            <button class="btn btn-sm btn-outline" onclick="renameProfile()">Rename</button>
+          </div>
+        </div>
+        <div class="separator"></div>
+        <p style="color:var(--muted);font-size:14px;margin-bottom:12px;">Permanently delete this account and all its data.</p>
+        <button class="btn btn-danger" style="width:auto" onclick="deleteProfile()">Delete This Account</button>
+      </div>`}
   `;
 }
 
@@ -1790,6 +1927,311 @@ function esc(s) {
 }
 
 // ════════════════════════════════════════════════════════════
+// PROFILE MANAGEMENT (settings)
+// ════════════════════════════════════════════════════════════
+function renameProfile() {
+  const p = getProfiles().find(p => p.id === currentUser);
+  if (!p) return;
+  openModal('Rename Account', `
+    <div class="form-group">
+      <label class="form-label">Account Name</label>
+      <input type="text" class="form-input" id="rp-name" value="${esc(p.name)}" placeholder="Account name">
+    </div>`,
+  [
+    { label: 'Cancel', cls: 'btn-secondary', fn: closeModal },
+    { label: 'Save',   cls: 'btn-primary',   fn: () => {
+      const name = document.getElementById('rp-name').value.trim();
+      if (!name) { alert('Please enter a name.'); return; }
+      const profiles = getProfiles();
+      profiles.find(p => p.id === currentUser).name = name;
+      saveProfiles(profiles);
+      document.getElementById('user-badge').textContent = name;
+      closeModal(); renderSettings();
+    }}
+  ]);
+}
+
+function deleteProfile() {
+  const p = getProfiles().find(p => p.id === currentUser);
+  if (!confirm(`Delete "${p ? p.name : 'this account'}" and all its data? This cannot be undone.`)) return;
+  const profiles = getProfiles().filter(p => p.id !== currentUser);
+  saveProfiles(profiles);
+  localStorage.removeItem(profileKey(currentUser));
+  logout();
+}
+
+// ════════════════════════════════════════════════════════════
+// COMBINED VIEW HELPERS
+// ════════════════════════════════════════════════════════════
+function toPLN(amount, currency, data) {
+  if (currency === 'PLN') return amount;
+  const rates = data.exchangeRates || {};
+  return amount * (rates[currency] || 1);
+}
+
+function calcMonthInPLN(data, ym) {
+  const md = (data.monthlyData || {})[ym] || {};
+  const income   = md.income || {};
+  let inc = 0, fixed = 0, variable = 0;
+  (data.incomeSources||[]).forEach(s => {
+    inc += toPLN(parseFloat(income[s.id]||0), s.currency, data);
+  });
+  (data.fixedExpenses||[]).forEach(f => {
+    fixed += toPLN(f.amount, f.currency, data);
+  });
+  ((md.variableExpenses)||[]).forEach(e => {
+    variable += toPLN(e.amount, e.currency, data);
+  });
+  return { income: inc, fixed, variable, expenses: fixed+variable, surplus: inc-fixed-variable };
+}
+
+function netWorthInPLN(data, ym) {
+  const md = (data.monthlyData||{})[ym];
+  if (!md || !md.netWorth) return 0;
+  let total = 0;
+  (data.accounts||[]).forEach(a => {
+    total += toPLN(parseFloat(md.netWorth[a.id]||0), a.currency, data);
+  });
+  return total;
+}
+
+// ════════════════════════════════════════════════════════════
+// COMBINED VIEW RENDERING
+// ════════════════════════════════════════════════════════════
+function renderCombinedOverview() {
+  const profiles = getProfiles();
+  const rows = profiles.map(p => {
+    const data = getProfileData(p.id);
+    return { name: p.name, ...calcMonthInPLN(data, currentMonth) };
+  });
+  const pm      = prevYM(currentMonth);
+  const prevRows = profiles.map(p => calcMonthInPLN(getProfileData(p.id), pm));
+  const prevHasData = prevRows.some(r => r.income > 0 || r.expenses > 0);
+
+  const totalIncome   = rows.reduce((s,r)=>s+r.income,   0);
+  const totalExpenses = rows.reduce((s,r)=>s+r.expenses,  0);
+  const totalSurplus  = totalIncome - totalExpenses;
+  const prevTotalIncome   = prevRows.reduce((s,r)=>s+r.income,   0);
+  const prevTotalExpenses = prevRows.reduce((s,r)=>s+r.expenses,  0);
+  const prevTotalSurplus  = prevTotalIncome - prevTotalExpenses;
+
+  const sc = totalSurplus > 0 ? 'pos' : totalSurplus < 0 ? 'neg' : 'zero';
+
+  document.getElementById('pg-overview').innerHTML = `
+    <div class="note" style="margin-bottom:20px;">
+      Combined View — read only. Log into each account to edit data.
+    </div>
+    <div class="month-nav">
+      <button class="mnav-btn" onclick="goOv(-1)">&#8592;</button>
+      <div class="month-label">${fmtMonth(currentMonth)}</div>
+      <button class="mnav-btn" onclick="goOv(1)">&#8594;</button>
+    </div>
+    <div class="balance-card">
+      <div class="balance-label">Combined Surplus / Deficit</div>
+      <div class="balance-amount ${sc}">${fmtC(totalSurplus,'PLN')}</div>
+      ${prevHasData ? `<div class="balance-meta diff ${totalSurplus-prevTotalSurplus>=0?'pos':'neg'}">${fmtDiff(totalSurplus-prevTotalSurplus,'PLN')} vs last month</div>` : ''}
+      <div class="balance-details">
+        <div class="balance-detail">
+          <div class="bd-label">Total Income</div>
+          <div class="bd-amount amt-pos">${fmtC(totalIncome,'PLN')}</div>
+          ${prevHasData ? `<div class="diff ${totalIncome-prevTotalIncome>=0?'pos':'neg'}">${fmtDiff(totalIncome-prevTotalIncome,'PLN')}</div>` : ''}
+        </div>
+        <div class="balance-detail">
+          <div class="bd-label">Total Expenses</div>
+          <div class="bd-amount amt-neg">${fmtC(totalExpenses,'PLN')}</div>
+          ${prevHasData ? `<div class="diff ${totalExpenses-prevTotalExpenses<=0?'pos':'neg'}">${fmtDiff(totalExpenses-prevTotalExpenses,'PLN')}</div>` : ''}
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">By Account</div>
+      <div class="tbl-wrap"><table>
+        <thead><tr>
+          <th>Account</th>
+          <th class="td-r">Income</th>
+          <th class="td-r">Expenses</th>
+          <th class="td-r">Surplus</th>
+        </tr></thead>
+        <tbody>
+          ${rows.map(r => `<tr>
+            <td><strong>${esc(r.name)}</strong></td>
+            <td class="td-r amt amt-pos">${fmt(r.income)}</td>
+            <td class="td-r amt amt-neg">${fmt(r.expenses)}</td>
+            <td class="td-r amt ${r.surplus>=0?'amt-pos':'amt-neg'}">${fmt(r.surplus)}</td>
+          </tr>`).join('')}
+          <tr style="border-top:2px solid var(--border);font-weight:600;">
+            <td>Total (PLN)</td>
+            <td class="td-r amt amt-pos">${fmt(totalIncome)}</td>
+            <td class="td-r amt amt-neg">${fmt(totalExpenses)}</td>
+            <td class="td-r amt ${totalSurplus>=0?'amt-pos':'amt-neg'}">${fmt(totalSurplus)}</td>
+          </tr>
+        </tbody>
+      </table></div>
+    </div>`;
+}
+
+function renderCombinedNetWorth() {
+  const profiles = getProfiles();
+
+  // Current month totals
+  const nwRows = profiles.map(p => ({
+    name: p.name,
+    nw: netWorthInPLN(getProfileData(p.id), currentMonth)
+  }));
+  const totalNW = nwRows.reduce((s,r)=>s+r.nw, 0);
+
+  // Chart: months where any profile has net worth data
+  const allMonths = new Set();
+  profiles.forEach(p => {
+    Object.entries(getProfileData(p.id).monthlyData||{}).forEach(([ym, s]) => {
+      if (s.netWorth && Object.keys(s.netWorth).length > 0) allMonths.add(ym);
+    });
+  });
+  const sortedMs = [...allMonths].sort();
+  const chartLabels = sortedMs.map(ym => { const [y,m]=ym.split('-'); return `${MONTH_NAMES[+m-1].slice(0,3)} ${y}`; });
+
+  const COLORS = ['#2563EB','#16A34A','#DC2626','#D97706','#7C3AED'];
+
+  const datasets = profiles.map((p,i) => ({
+    label: p.name,
+    data: sortedMs.map(ym => +netWorthInPLN(getProfileData(p.id), ym).toFixed(2)),
+    borderColor: COLORS[i % COLORS.length],
+    backgroundColor: 'transparent',
+    borderWidth: 2,
+    pointRadius: 4,
+    tension: 0.3
+  }));
+
+  if (profiles.length > 1) {
+    datasets.push({
+      label: 'Combined',
+      data: sortedMs.map(ym => +profiles.reduce((s,p)=>s+netWorthInPLN(getProfileData(p.id),ym),0).toFixed(2)),
+      borderColor: '#6B7280',
+      backgroundColor: 'rgba(107,114,128,0.06)',
+      borderWidth: 2.5,
+      borderDash: [5,3],
+      pointRadius: 5,
+      fill: true,
+      tension: 0.3
+    });
+  }
+
+  const pg = document.getElementById('pg-networth');
+  pg.innerHTML = `
+    <div class="note" style="margin-bottom:20px;">Combined View — read only. All amounts in PLN.</div>
+    <div class="month-nav">
+      <button class="mnav-btn" onclick="goNW(-1)">&#8592;</button>
+      <div class="month-label">${fmtMonth(currentMonth)}</div>
+      <button class="mnav-btn" onclick="goNW(1)">&#8594;</button>
+    </div>
+    <div class="card" style="text-align:center;padding-bottom:28px;">
+      <div class="balance-label">Combined Net Worth — ${fmtMonth(currentMonth)}</div>
+      <div class="nw-total">${fmtC(totalNW,'PLN')}</div>
+    </div>
+    <div class="card">
+      <div class="card-title">By Account</div>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Account</th><th class="td-r">Net Worth (PLN)</th></tr></thead>
+        <tbody>
+          ${nwRows.map(r=>`<tr>
+            <td><strong>${esc(r.name)}</strong></td>
+            <td class="td-r amt amt-pos">${fmt(r.nw)}</td>
+          </tr>`).join('')}
+          <tr style="border-top:2px solid var(--border);font-weight:600;">
+            <td>Combined</td>
+            <td class="td-r amt amt-pos">${fmt(totalNW)}</td>
+          </tr>
+        </tbody>
+      </table></div>
+    </div>
+    ${sortedMs.length > 1 ? `
+    <div class="card">
+      <div class="card-title">Net Worth Over Time</div>
+      <div class="chart-box"><canvas id="nw-canvas"></canvas></div>
+    </div>` : ''}`;
+
+  if (sortedMs.length > 1) {
+    const ctx = document.getElementById('nw-canvas');
+    if (nwChart) { nwChart.destroy(); nwChart = null; }
+    nwChart = new Chart(ctx, {
+      type: 'line',
+      data: { labels: chartLabels, datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: true, position: 'bottom' },
+          tooltip: { callbacks: { label: c => `${c.dataset.label}: ${fmt(c.parsed.y)} PLN` } }
+        },
+        scales: {
+          y: { ticks: { callback: v => `${fmt(v)}`, font:{size:12} }, grid:{color:'#E5E7EB'} },
+          x: { ticks: { font:{size:12} }, grid:{display:false} }
+        }
+      }
+    });
+  }
+}
+
+function renderCombinedHistory() {
+  const profiles = getProfiles();
+  const allMonths = new Set();
+  profiles.forEach(p => {
+    Object.keys(getProfileData(p.id).monthlyData||{}).forEach(ym => allMonths.add(ym));
+  });
+  const sortedMs = [...allMonths].sort().reverse();
+
+  if (sortedMs.length === 0) {
+    document.getElementById('pg-history').innerHTML = `
+      <div class="card"><div class="empty" style="padding:48px">No history data yet.</div></div>`;
+    return;
+  }
+
+  const rows = sortedMs.map(ym => {
+    const byProfile = profiles.map(p => ({ name: p.name, ...calcMonthInPLN(getProfileData(p.id), ym) }));
+    const totalIncome   = byProfile.reduce((s,r)=>s+r.income,  0);
+    const totalExpenses = byProfile.reduce((s,r)=>s+r.expenses, 0);
+    const pm = prevYM(ym);
+    const prevByProfile = profiles.map(p => calcMonthInPLN(getProfileData(p.id), pm));
+    const prevIncome   = prevByProfile.reduce((s,r)=>s+r.income,  0);
+    const prevExpenses = prevByProfile.reduce((s,r)=>s+r.expenses, 0);
+    const hasPrev = prevIncome > 0 || prevExpenses > 0;
+    return { ym, totalIncome, totalExpenses, totalSurplus: totalIncome-totalExpenses,
+             prevIncome, prevExpenses, prevSurplus: prevIncome-prevExpenses, hasPrev };
+  });
+
+  document.getElementById('pg-history').innerHTML = `
+    <div class="note" style="margin-bottom:16px;">Combined history — all amounts in PLN.</div>
+    <div class="card">
+      <div class="card-title">Combined Monthly History</div>
+      <div class="tbl-wrap"><table>
+        <thead><tr>
+          <th>Month</th>
+          <th class="td-r">Income</th>
+          <th class="td-r">Expenses</th>
+          <th class="td-r">Surplus</th>
+        </tr></thead>
+        <tbody>
+          ${rows.map(r=>`<tr>
+            <td><strong>${fmtMonth(r.ym)}</strong></td>
+            <td class="td-r">
+              <div class="amt amt-pos">${fmt(r.totalIncome)}</div>
+              ${r.hasPrev?`<div class="diff ${r.totalIncome-r.prevIncome>=0?'pos':'neg'}">${fmtDiff(r.totalIncome-r.prevIncome,'')}</div>`:''}
+            </td>
+            <td class="td-r">
+              <div class="amt amt-neg">${fmt(r.totalExpenses)}</div>
+              ${r.hasPrev?`<div class="diff ${r.totalExpenses-r.prevExpenses<=0?'pos':'neg'}">${fmtDiff(r.totalExpenses-r.prevExpenses,'')}</div>`:''}
+            </td>
+            <td class="td-r">
+              <div class="amt ${r.totalSurplus>=0?'amt-pos':'amt-neg'}">${fmt(r.totalSurplus)}</div>
+              ${r.hasPrev?`<div class="diff ${r.totalSurplus-r.prevSurplus>=0?'pos':'neg'}">${fmtDiff(r.totalSurplus-r.prevSurplus,'')}</div>`:''}
+            </td>
+          </tr>`).join('')}
+        </tbody>
+      </table></div>
+    </div>`;
+}
+
+// ════════════════════════════════════════════════════════════
 // KEYBOARD
 // ════════════════════════════════════════════════════════════
 document.addEventListener('keydown', e => {
@@ -1800,6 +2242,7 @@ document.addEventListener('keydown', e => {
 // BOOT
 // ════════════════════════════════════════════════════════════
 document.getElementById('login-screen').style.display = 'flex';
+renderLogin();
 </script>
 </body>
 </html>
