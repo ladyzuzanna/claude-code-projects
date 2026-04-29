@@ -381,6 +381,15 @@ tr:hover td { background: #FAFAFA; }
   color: #1E40AF;
   margin-bottom: 14px;
 }
+.settings-section-heading {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 6px 2px 8px;
+  margin-top: 8px;
+}
 
 /* ── CSV PRE ── */
 .csv-pre {
@@ -1387,12 +1396,16 @@ function renderSettings() {
   const pg = document.getElementById('pg-settings');
   pg.innerHTML = `
 
+    <!-- ── FINANCES SETUP ─────────────────────────────────── -->
+    <div class="settings-section-heading">Finances Setup</div>
+
     <!-- Accounts -->
     <div class="card">
       <div class="card-title">
         Accounts
         <button class="btn btn-success btn-sm" onclick="addAccount()">+ Add Account</button>
       </div>
+      <p style="color:var(--muted);font-size:14px;margin-bottom:14px;">Accounts are tracked in Net Worth. Add every bank account, savings, or investment account you want to follow.</p>
       ${data.accounts.length === 0
         ? `<div class="empty" style="padding:20px">No accounts yet.</div>`
         : data.accounts.map((a, i) => `
@@ -1415,10 +1428,10 @@ function renderSettings() {
     <!-- Income Sources -->
     <div class="card">
       <div class="card-title">
-        Other Income Sources
+        Income Sources
         <button class="btn btn-success btn-sm" onclick="addIncomeSource()">+ Add Source</button>
       </div>
-      <p style="color:var(--muted);font-size:14px;margin-bottom:14px;">Named income streams that appear in Monthly Overview but are not tracked as accounts (no net worth).</p>
+      <p style="color:var(--muted);font-size:14px;margin-bottom:14px;">Named income streams shown in Monthly Overview. Not tied to accounts — no net worth tracking.</p>
       ${(data.incomeSources||[]).length === 0
         ? `<div class="empty" style="padding:20px">No income sources yet.</div>`
         : (data.incomeSources||[]).map((s, i) => `
@@ -1444,7 +1457,7 @@ function renderSettings() {
         Fixed Monthly Expenses
         <button class="btn btn-success btn-sm" onclick="addFixed()">+ Add</button>
       </div>
-      <p style="color:var(--muted);font-size:14px;margin-bottom:14px;">These apply to every month automatically.</p>
+      <p style="color:var(--muted);font-size:14px;margin-bottom:14px;">Recurring costs that apply automatically every month — rent, subscriptions, loans, etc.</p>
       ${data.fixedExpenses.length === 0
         ? `<div class="empty" style="padding:20px">No fixed expenses yet.</div>`
         : data.fixedExpenses.map(f => `
@@ -1460,12 +1473,13 @@ function renderSettings() {
           </div>`).join('')}
     </div>
 
-    <!-- Categories -->
+    <!-- Expense Categories -->
     <div class="card">
       <div class="card-title">
         Expense Categories
         <button class="btn btn-success btn-sm" onclick="addCategory()">+ Add</button>
       </div>
+      <p style="color:var(--muted);font-size:14px;margin-bottom:14px;">Labels used when logging variable expenses. Remove or add to match your lifestyle.</p>
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
         ${(data.categories||[]).map(c => `
           <div class="chip">
@@ -1475,9 +1489,12 @@ function renderSettings() {
       </div>
     </div>
 
+    <!-- ── PREFERENCES ────────────────────────────────────── -->
+    <div class="settings-section-heading" style="margin-top:20px;">Preferences</div>
+
     <!-- Currency -->
     <div class="card">
-      <div class="card-title">Currency Settings</div>
+      <div class="card-title">Currency</div>
       <div class="form-group">
         <label class="form-label">Base Currency (all totals shown in this currency)</label>
         <select class="form-select" id="sel-base" onchange="saveBase()">
@@ -1495,18 +1512,21 @@ function renderSettings() {
         </div>`).join('')}
     </div>
 
+    <!-- ── ACCOUNT & SECURITY ─────────────────────────────── -->
+    <div class="settings-section-heading" style="margin-top:20px;">Account &amp; Security</div>
+
     <!-- Download Data -->
     ${currentUser !== 'demo' ? `
     <div class="card">
       <div class="card-title">Download Your Data</div>
-      <p class="note" style="margin-bottom:14px;">Export all your income, expenses and net worth history as a CSV file for your records.</p>
+      <p style="color:var(--muted);font-size:14px;margin-bottom:14px;">Export all your income, expenses and net worth history as a CSV file for your records.</p>
       <button class="btn btn-secondary" style="width:auto" onclick="exportCSV()">Download CSV</button>
     </div>` : ''}
 
     <!-- Password -->
     <div class="card">
       <div class="card-title">Password</div>
-      <div class="note">This password protects against casual access only. Data is stored unencrypted in your browser's local storage.</div>
+      <p style="color:var(--muted);font-size:14px;margin-bottom:14px;">This password protects against casual access only. Data is stored unencrypted in your browser's local storage.</p>
       ${currentUser === 'demo'
         ? `<p style="color:var(--muted)">Password settings are not available in the Demo Account.</p>`
         : `<div class="form-group">
