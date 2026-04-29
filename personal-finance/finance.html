@@ -746,9 +746,6 @@ function calcMonth(data, ym) {
   const md   = monthSlot(data, ym);
   const base = data.baseCurrency || 'PLN';
   let income = 0, fixed = 0, variable = 0;
-  (data.accounts||[]).forEach(a => {
-    income += toBase(parseFloat(md.income[a.id]||0), a.currency, data);
-  });
   (data.incomeSources||[]).forEach(s => {
     income += toBase(parseFloat(md.income[s.id]||0), s.currency, data);
   });
@@ -811,39 +808,11 @@ function renderOverview() {
         Income
         <span style="font-size:15px;font-weight:400;color:var(--muted)">Total: <strong class="amt-pos">${fmtC(cur.income,base)}</strong></span>
       </div>
-
-      ${data.accounts.length === 0
-        ? `<div class="empty" style="padding:12px 0 4px">No accounts yet — add them in Settings.</div>`
-        : `<div class="income-sub-label">Accounts</div>
-           <div class="tbl-wrap"><table>
-            <thead><tr>
-              <th>Name</th><th>Currency</th>
-              <th class="td-r">Amount</th>
-              <th class="td-r">In ${base}</th>
-              <th></th>
-            </tr></thead>
-            <tbody>
-              ${data.accounts.map(a => {
-                const amt = parseFloat(md.income[a.id]||0);
-                const inB = toBase(amt, a.currency, data);
-                return `<tr>
-                  <td><strong>${esc(a.name)}</strong></td>
-                  <td><span class="badge badge-gray">${a.currency}</span></td>
-                  <td class="td-r amt">${fmt(amt)}</td>
-                  <td class="td-r amt amt-pos">${a.currency===base?'—':fmt(inB)}</td>
-                  <td class="td-r"><button class="btn btn-sm btn-outline" onclick="editIncome('${a.id}')">Edit</button></td>
-                </tr>`;
-              }).join('')}
-            </tbody>
-          </table></div>`
-      }
-
-      <div class="income-sub-label" style="margin-top:18px;">
-        Other Income
-        <button class="btn btn-sm btn-success" style="margin-left:10px;" onclick="addIncomeSource()">+ Add Source</button>
+      <div style="margin-bottom:14px;">
+        <button class="btn btn-success btn-sm" onclick="addIncomeSource()">+ Add Source</button>
       </div>
       ${(data.incomeSources||[]).length === 0
-        ? `<div style="color:var(--muted);font-size:14px;padding:10px 0 4px;">No other income sources yet — click "+ Add Source" to add one.</div>`
+        ? `<div class="empty">No income sources yet — click "+ Add Source" to add one.</div>`
         : `<div class="tbl-wrap"><table>
             <thead><tr>
               <th>Name</th><th>Currency</th>
