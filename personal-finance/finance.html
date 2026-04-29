@@ -1495,6 +1495,14 @@ function renderSettings() {
         </div>`).join('')}
     </div>
 
+    <!-- Download Data -->
+    ${currentUser !== 'demo' ? `
+    <div class="card">
+      <div class="card-title">Download Your Data</div>
+      <p class="note" style="margin-bottom:14px;">Export all your income, expenses and net worth history as a CSV file for your records.</p>
+      <button class="btn btn-secondary" style="width:auto" onclick="exportCSV()">Download CSV</button>
+    </div>` : ''}
+
     <!-- Password -->
     <div class="card">
       <div class="card-title">Password</div>
@@ -2085,11 +2093,31 @@ function deleteProfile() {
 }
 
 function confirmDeleteProfile() {
+  openModal('Before you go', `
+    <p style="font-size:17px;margin-bottom:16px;">Do you want to download your data before it's gone?</p>
+    <p style="font-size:14px;color:var(--muted);margin-bottom:20px;">
+      Once deleted, your data cannot be recovered. Downloading now gives you a backup copy.
+    </p>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <button class="btn btn-primary btn-full" onclick="doDeleteAccount(true)">Yes, save my data first</button>
+      <button class="btn btn-secondary btn-full" onclick="doDeleteAccount(false)">No thanks, just delete</button>
+    </div>`,
+  []);
+}
+
+function doDeleteAccount(downloadFirst) {
+  if (downloadFirst) exportCSV();
   const profiles = getProfiles().filter(p => p.id !== currentUser);
   saveProfiles(profiles);
   localStorage.removeItem(profileKey(currentUser));
-  closeModal();
-  logout();
+  openModal('Account deleted', `
+    <div style="text-align:center;padding:10px 0 20px;">
+      <div style="font-size:40px;margin-bottom:16px;">👋</div>
+      <p style="font-size:17px;font-weight:600;margin-bottom:8px;">Your account has been permanently deleted.</p>
+      <p style="font-size:14px;color:var(--muted);margin-bottom:24px;">All data has been removed from this device.</p>
+      <button class="btn btn-primary btn-full" onclick="closeModal();logout()">Back to login</button>
+    </div>`,
+  []);
 }
 
 // ════════════════════════════════════════════════════════════
