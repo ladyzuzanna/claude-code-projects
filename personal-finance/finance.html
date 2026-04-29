@@ -327,6 +327,16 @@ tr:hover td { background: #FAFAFA; }
   border-bottom: 1px solid var(--border);
 }
 .si:last-child { border-bottom: none; }
+.income-sub-label {
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+}
 .si-move  { display: flex; flex-direction: column; gap: 3px; flex-shrink: 0; margin-right: 4px; }
 .si-move .btn { padding: 3px 8px; font-size: 11px; line-height: 1; }
 .si-move .btn:disabled { opacity: 0.2; cursor: default; }
@@ -570,6 +580,7 @@ function monthSlot(data, ym) {
 function defaultData() {
   return {
     accounts: [],
+    incomeSources: [],
     categories: ['Food', 'Transport', 'Entertainment'],
     fixedExpenses: [],
     monthlyData: {},
@@ -639,7 +650,19 @@ function buildDemoData() {
     }
   };
 
-  return { accounts, categories, fixedExpenses, monthlyData, exchangeRates, baseCurrency: 'PLN', password: '123' };
+  const incomeSources = [
+    { id: 'ds1', name: 'Freelance Work', currency: 'PLN' },
+    { id: 'ds2', name: 'Side Project',   currency: 'PLN' }
+  ];
+
+  // add demo income for income sources
+  Object.values(monthlyData).forEach((s, i) => {
+    const seeds = [800, 1200, 500, 950];
+    s.income['ds1'] = seeds[i % seeds.length] + i * 100;
+    s.income['ds2'] = 300 + i * 50;
+  });
+
+  return { accounts, incomeSources, categories, fixedExpenses, monthlyData, exchangeRates, baseCurrency: 'PLN', password: '123' };
 }
 
 // ════════════════════════════════════════════════════════════
@@ -726,6 +749,9 @@ function calcMonth(data, ym) {
   (data.accounts||[]).forEach(a => {
     income += toBase(parseFloat(md.income[a.id]||0), a.currency, data);
   });
+  (data.incomeSources||[]).forEach(s => {
+    income += toBase(parseFloat(md.income[s.id]||0), s.currency, data);
+  });
   (data.fixedExpenses||[]).forEach(f => {
     fixed += toBase(f.amount, f.currency, data);
   });
@@ -785,11 +811,13 @@ function renderOverview() {
         Income
         <span style="font-size:15px;font-weight:400;color:var(--muted)">Total: <strong class="amt-pos">${fmtC(cur.income,base)}</strong></span>
       </div>
+
       ${data.accounts.length === 0
-        ? `<div class="empty">No accounts yet — add them in Settings.</div>`
-        : `<div class="tbl-wrap"><table>
+        ? `<div class="empty" style="padding:12px 0 4px">No accounts yet — add them in Settings.</div>`
+        : `<div class="income-sub-label">Accounts</div>
+           <div class="tbl-wrap"><table>
             <thead><tr>
-              <th>Account</th><th>Currency</th>
+              <th>Name</th><th>Currency</th>
               <th class="td-r">Amount</th>
               <th class="td-r">In ${base}</th>
               <th></th>
@@ -804,6 +832,35 @@ function renderOverview() {
                   <td class="td-r amt">${fmt(amt)}</td>
                   <td class="td-r amt amt-pos">${a.currency===base?'—':fmt(inB)}</td>
                   <td class="td-r"><button class="btn btn-sm btn-outline" onclick="editIncome('${a.id}')">Edit</button></td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table></div>`
+      }
+
+      <div class="income-sub-label" style="margin-top:18px;">
+        Other Income
+        <button class="btn btn-sm btn-success" style="margin-left:10px;" onclick="addIncomeSource()">+ Add Source</button>
+      </div>
+      ${(data.incomeSources||[]).length === 0
+        ? `<div style="color:var(--muted);font-size:14px;padding:10px 0 4px;">No other income sources yet — click "+ Add Source" to add one.</div>`
+        : `<div class="tbl-wrap"><table>
+            <thead><tr>
+              <th>Name</th><th>Currency</th>
+              <th class="td-r">Amount</th>
+              <th class="td-r">In ${base}</th>
+              <th></th>
+            </tr></thead>
+            <tbody>
+              ${(data.incomeSources||[]).map(s => {
+                const amt = parseFloat(md.income[s.id]||0);
+                const inB = toBase(amt, s.currency, data);
+                return `<tr>
+                  <td><strong>${esc(s.name)}</strong></td>
+                  <td><span class="badge badge-gray">${s.currency}</span></td>
+                  <td class="td-r amt">${fmt(amt)}</td>
+                  <td class="td-r amt amt-pos">${s.currency===base?'—':fmt(inB)}</td>
+                  <td class="td-r"><button class="btn btn-sm btn-outline" onclick="editIncome('${s.id}')">Edit</button></td>
                 </tr>`;
               }).join('')}
             </tbody>
@@ -1133,6 +1190,32 @@ function renderSettings() {
           </div>`).join('')}
     </div>
 
+    <!-- Income Sources -->
+    <div class="card">
+      <div class="card-title">
+        Other Income Sources
+        <button class="btn btn-success btn-sm" onclick="addIncomeSource()">+ Add Source</button>
+      </div>
+      <p style="color:var(--muted);font-size:14px;margin-bottom:14px;">Named income streams that appear in Monthly Overview but are not tracked as accounts (no net worth).</p>
+      ${(data.incomeSources||[]).length === 0
+        ? `<div class="empty" style="padding:20px">No income sources yet.</div>`
+        : (data.incomeSources||[]).map((s, i) => `
+          <div class="si">
+            <div class="si-move">
+              <button class="btn btn-icon btn-outline" onclick="moveIncomeSource('${s.id}',-1)" ${i === 0 ? 'disabled' : ''} title="Move up">&#9650;</button>
+              <button class="btn btn-icon btn-outline" onclick="moveIncomeSource('${s.id}', 1)" ${i === (data.incomeSources.length-1) ? 'disabled' : ''} title="Move down">&#9660;</button>
+            </div>
+            <div class="si-info">
+              <div class="si-name">${esc(s.name)}</div>
+              <div class="si-sub">${s.currency}</div>
+            </div>
+            <div class="si-actions">
+              <button class="btn btn-sm btn-outline" onclick="editIncomeSource('${s.id}')">Edit</button>
+              <button class="btn btn-sm btn-danger"  onclick="delIncomeSource('${s.id}')">Delete</button>
+            </div>
+          </div>`).join('')}
+    </div>
+
     <!-- Fixed Expenses -->
     <div class="card">
       <div class="card-title">
@@ -1263,18 +1346,18 @@ function changePassword() {
 // ════════════════════════════════════════════════════════════
 // INCOME MODAL
 // ════════════════════════════════════════════════════════════
-function editIncome(accId) {
-  const data = getData();
-  const acc  = data.accounts.find(a=>a.id===accId);
-  if (!acc) return;
-  const cur = parseFloat(monthSlot(data, currentMonth).income[accId]||0);
+function editIncome(id) {
+  const data   = getData();
+  const source = data.accounts.find(a=>a.id===id) || (data.incomeSources||[]).find(s=>s.id===id);
+  if (!source) return;
+  const cur = parseFloat(monthSlot(data, currentMonth).income[id]||0);
 
-  openModal(`Income — ${esc(acc.name)}`, `
+  openModal(`Income — ${esc(source.name)}`, `
     <p style="color:var(--muted);font-size:15px;margin-bottom:16px;">
-      Amount received into <strong>${esc(acc.name)}</strong> in ${fmtMonth(currentMonth)}.
+      Amount from <strong>${esc(source.name)}</strong> in ${fmtMonth(currentMonth)}.
     </p>
     <div class="form-group">
-      <label class="form-label">Amount (${acc.currency})</label>
+      <label class="form-label">Amount (${source.currency})</label>
       <input type="number" class="form-input" id="inc-amt" value="${cur}" step="0.01" min="0" placeholder="0.00">
     </div>`,
   [
@@ -1282,7 +1365,7 @@ function editIncome(accId) {
     { label: 'Save',   cls: 'btn-primary',   fn: () => {
       const v = parseFloat(document.getElementById('inc-amt').value);
       const d = getData();
-      monthSlot(d, currentMonth).income[accId] = isNaN(v) ? 0 : v;
+      monthSlot(d, currentMonth).income[id] = isNaN(v) ? 0 : v;
       saveData(d);
       closeModal();
       renderOverview();
@@ -1420,6 +1503,73 @@ function delAccount(id) {
     if (s.income)   delete s.income[id];
     if (s.netWorth) delete s.netWorth[id];
   });
+  saveData(d); renderSettings();
+}
+
+// ════════════════════════════════════════════════════════════
+// INCOME SOURCE CRUD
+// ════════════════════════════════════════════════════════════
+function incomeSourceModal(title, src, onSave) {
+  const d = getData();
+  openModal(title, `
+    <div class="form-group">
+      <label class="form-label">Name</label>
+      <input type="text" class="form-input" id="is-name" value="${esc(src.name||'')}" placeholder="e.g. Freelance Work">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Currency</label>
+      <select class="form-select" id="is-cur">
+        ${CURRENCIES.map(c=>`<option value="${c}" ${(src.currency||d.baseCurrency||'PLN')===c?'selected':''}>${c}</option>`).join('')}
+      </select>
+    </div>`,
+  [
+    { label: 'Cancel', cls: 'btn-secondary', fn: closeModal },
+    { label: 'Save',   cls: 'btn-primary',   fn: onSave }
+  ]);
+}
+
+function addIncomeSource() {
+  incomeSourceModal('Add Income Source', {}, () => {
+    const name = document.getElementById('is-name').value.trim();
+    const cur  = document.getElementById('is-cur').value;
+    if (!name) { alert('Please enter a name.'); return; }
+    const d = getData();
+    if (!d.incomeSources) d.incomeSources = [];
+    d.incomeSources.push({ id: uid(), name, currency: cur });
+    saveData(d); closeModal(); renderOverview();
+  });
+}
+
+function editIncomeSource(id) {
+  const d   = getData();
+  const src = (d.incomeSources||[]).find(s=>s.id===id);
+  if (!src) return;
+  incomeSourceModal('Edit Income Source', src, () => {
+    const name = document.getElementById('is-name').value.trim();
+    const cur  = document.getElementById('is-cur').value;
+    if (!name) { alert('Please enter a name.'); return; }
+    const d2  = getData();
+    const s2  = (d2.incomeSources||[]).find(s=>s.id===id);
+    s2.name = name; s2.currency = cur;
+    saveData(d2); closeModal(); renderSettings();
+  });
+}
+
+function delIncomeSource(id) {
+  if (!confirm('Delete this income source? Its monthly amounts will also be removed.')) return;
+  const d = getData();
+  d.incomeSources = (d.incomeSources||[]).filter(s=>s.id!==id);
+  Object.values(d.monthlyData||{}).forEach(s => { if (s.income) delete s.income[id]; });
+  saveData(d); renderSettings();
+}
+
+function moveIncomeSource(id, dir) {
+  const d = getData();
+  if (!d.incomeSources) return;
+  const i = d.incomeSources.findIndex(s=>s.id===id);
+  const j = i + dir;
+  if (j < 0 || j >= d.incomeSources.length) return;
+  [d.incomeSources[i], d.incomeSources[j]] = [d.incomeSources[j], d.incomeSources[i]];
   saveData(d); renderSettings();
 }
 
