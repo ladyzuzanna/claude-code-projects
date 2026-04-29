@@ -2073,20 +2073,23 @@ function deleteProfile() {
     <p style="font-size:17px;margin-bottom:12px;">
       Are you sure you want to delete <strong>${esc(name)}</strong>?
     </p>
-    <div style="background:var(--red-light);border:1px solid #FECACA;border-radius:8px;padding:12px 14px;font-size:15px;color:#7F1D1D;">
+    <div style="background:var(--red-light);border:1px solid #FECACA;border-radius:8px;padding:12px 14px;font-size:15px;color:#7F1D1D;margin-bottom:20px;">
       All income, expenses, net worth data and settings will be permanently deleted.
       This cannot be undone.
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <button class="btn btn-secondary btn-full" onclick="closeModal()">Cancel, keep my account</button>
+      <button class="btn btn-danger btn-full" onclick="confirmDeleteProfile()">Yes, delete permanently</button>
     </div>`,
-  [
-    { label: 'Cancel — keep my account', cls: 'btn-secondary', fn: closeModal },
-    { label: 'Yes, delete permanently',  cls: 'btn-danger',    fn: () => {
-      const profiles = getProfiles().filter(p => p.id !== currentUser);
-      saveProfiles(profiles);
-      localStorage.removeItem(profileKey(currentUser));
-      closeModal();
-      logout();
-    }}
-  ]);
+  []);
+}
+
+function confirmDeleteProfile() {
+  const profiles = getProfiles().filter(p => p.id !== currentUser);
+  saveProfiles(profiles);
+  localStorage.removeItem(profileKey(currentUser));
+  closeModal();
+  logout();
 }
 
 // ════════════════════════════════════════════════════════════
