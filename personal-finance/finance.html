@@ -381,15 +381,6 @@ tr:hover td { background: #FAFAFA; }
   color: #1E40AF;
   margin-bottom: 14px;
 }
-.settings-section-heading {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--muted);
-  padding: 6px 2px 8px;
-  margin-top: 8px;
-}
 
 /* ── CSV PRE ── */
 .csv-pre {
@@ -524,6 +515,7 @@ let currentMonth = ymNow();
 let nwChart      = null;
 let ovChart      = null;
 let historyTab   = 'monthly';
+let settingsTab  = 'finances';
 
 // ════════════════════════════════════════════════════════════
 // DATE HELPERS
@@ -1111,6 +1103,7 @@ function renderOverview() {
 function goOv(d) { currentMonth = d<0 ? prevYM(currentMonth) : nextYM(currentMonth); renderOverview(); }
 
 function goToFixedSettings() {
+  settingsTab = 'finances';
   switchTab('settings');
   setTimeout(() => {
     const el = document.getElementById('settings-fixed-expenses');
@@ -1390,178 +1383,194 @@ function jumpMonth(ym) { currentMonth = ym; switchTab('overview'); }
 // SETTINGS TAB
 // ════════════════════════════════════════════════════════════
 function renderSettings() {
-  const data = getData();
-  const base = data.baseCurrency || 'PLN';
-
   const pg = document.getElementById('pg-settings');
   pg.innerHTML = `
-
-    <!-- ── FINANCES SETUP ─────────────────────────────────── -->
-    <div class="settings-section-heading">Finances Setup</div>
-
-    <!-- Accounts -->
-    <div class="card">
-      <div class="card-title">
-        Accounts
-        <button class="btn btn-success btn-sm" onclick="addAccount()">+ Add Account</button>
-      </div>
-      <p style="color:var(--muted);font-size:14px;margin-bottom:14px;">Accounts are tracked in Net Worth. Add every bank account, savings, or investment account you want to follow.</p>
-      ${data.accounts.length === 0
-        ? `<div class="empty" style="padding:20px">No accounts yet.</div>`
-        : data.accounts.map((a, i) => `
-          <div class="si">
-            <div class="si-move">
-              <button class="btn btn-icon btn-outline" onclick="moveAccount('${a.id}',-1)" ${i === 0 ? 'disabled' : ''} title="Move up">&#9650;</button>
-              <button class="btn btn-icon btn-outline" onclick="moveAccount('${a.id}', 1)" ${i === data.accounts.length-1 ? 'disabled' : ''} title="Move down">&#9660;</button>
-            </div>
-            <div class="si-info">
-              <div class="si-name">${esc(a.name)}</div>
-              <div class="si-sub">${a.currency}</div>
-            </div>
-            <div class="si-actions">
-              <button class="btn btn-sm btn-outline" onclick="editAccount('${a.id}')">Edit</button>
-              <button class="btn btn-sm btn-danger"  onclick="delAccount('${a.id}')">Delete</button>
-            </div>
-          </div>`).join('')}
+    <div class="inner-tabs">
+      <button class="inner-tab ${settingsTab==='finances'?'active':''}" onclick="switchSettingsTab('finances')">Finances Setup</button>
+      <button class="inner-tab ${settingsTab==='account'?'active':''}"  onclick="switchSettingsTab('account')">Account &amp; Security</button>
     </div>
+    <div id="settings-content"></div>`;
+  renderSettingsContent();
+}
 
-    <!-- Income Sources -->
-    <div class="card">
-      <div class="card-title">
-        Income Sources
-        <button class="btn btn-success btn-sm" onclick="addIncomeSource()">+ Add Source</button>
-      </div>
-      <p style="color:var(--muted);font-size:14px;margin-bottom:14px;">Named income streams shown in Monthly Overview. Not tied to accounts — no net worth tracking.</p>
-      ${(data.incomeSources||[]).length === 0
-        ? `<div class="empty" style="padding:20px">No income sources yet.</div>`
-        : (data.incomeSources||[]).map((s, i) => `
-          <div class="si">
-            <div class="si-move">
-              <button class="btn btn-icon btn-outline" onclick="moveIncomeSource('${s.id}',-1)" ${i === 0 ? 'disabled' : ''} title="Move up">&#9650;</button>
-              <button class="btn btn-icon btn-outline" onclick="moveIncomeSource('${s.id}', 1)" ${i === (data.incomeSources.length-1) ? 'disabled' : ''} title="Move down">&#9660;</button>
-            </div>
-            <div class="si-info">
-              <div class="si-name">${esc(s.name)}</div>
-              <div class="si-sub">${s.currency}</div>
-            </div>
-            <div class="si-actions">
-              <button class="btn btn-sm btn-outline" onclick="editIncomeSource('${s.id}')">Edit</button>
-              <button class="btn btn-sm btn-danger"  onclick="delIncomeSource('${s.id}')">Delete</button>
-            </div>
-          </div>`).join('')}
-    </div>
+function switchSettingsTab(tab) {
+  settingsTab = tab;
+  document.querySelectorAll('#pg-settings .inner-tab').forEach(b =>
+    b.classList.toggle('active', b.getAttribute('onclick').includes(`'${tab}'`)));
+  renderSettingsContent();
+}
 
-    <!-- Fixed Expenses -->
-    <div class="card" id="settings-fixed-expenses">
-      <div class="card-title">
-        Fixed Monthly Expenses
-        <button class="btn btn-success btn-sm" onclick="addFixed()">+ Add</button>
-      </div>
-      <p style="color:var(--muted);font-size:14px;margin-bottom:14px;">Recurring costs that apply automatically every month — rent, subscriptions, loans, etc.</p>
-      ${data.fixedExpenses.length === 0
-        ? `<div class="empty" style="padding:20px">No fixed expenses yet.</div>`
-        : data.fixedExpenses.map(f => `
-          <div class="si">
-            <div class="si-info">
-              <div class="si-name">${esc(f.name)}</div>
-              <div class="si-sub">${fmtC(f.amount,f.currency)} &middot; ${esc(f.category)}</div>
-            </div>
-            <div class="si-actions">
-              <button class="btn btn-sm btn-outline" onclick="editFixed('${f.id}')">Edit</button>
-              <button class="btn btn-sm btn-danger"  onclick="delFixed('${f.id}')">Delete</button>
-            </div>
-          </div>`).join('')}
-    </div>
+function renderSettingsContent() {
+  const data = getData();
+  const base = data.baseCurrency || 'PLN';
+  const el = document.getElementById('settings-content');
+  if (!el) return;
 
-    <!-- Expense Categories -->
-    <div class="card">
-      <div class="card-title">
-        Expense Categories
-        <button class="btn btn-success btn-sm" onclick="addCategory()">+ Add</button>
-      </div>
-      <p style="color:var(--muted);font-size:14px;margin-bottom:14px;">Labels used when logging variable expenses. Remove or add to match your lifestyle.</p>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;">
-        ${(data.categories||[]).map(c => `
-          <div class="chip">
-            ${esc(c)}
-            <button class="chip-del" onclick="delCategory('${esc(c)}')" title="Remove">&times;</button>
-          </div>`).join('')}
-      </div>
-    </div>
+  if (settingsTab === 'finances') {
+    el.innerHTML = `
 
-    <!-- ── PREFERENCES ────────────────────────────────────── -->
-    <div class="settings-section-heading" style="margin-top:20px;">Preferences</div>
-
-    <!-- Currency -->
-    <div class="card">
-      <div class="card-title">Currency</div>
-      <div class="form-group">
-        <label class="form-label">Base Currency (all totals shown in this currency)</label>
-        <select class="form-select" id="sel-base" onchange="saveBase()">
-          ${CURRENCIES.map(c=>`<option value="${c}" ${c===base?'selected':''}>${c}</option>`).join('')}
-        </select>
-      </div>
-      <p class="form-label" style="margin-bottom:10px;">Exchange rates — how many PLN equals 1 unit of:</p>
-      ${['EUR','USD','DKK'].map(c => `
-        <div class="form-group">
-          <label class="form-label">1 ${c} = ? PLN</label>
-          <input type="number" class="form-input" id="rate-${c}"
-            value="${(data.exchangeRates||{})[c]||''}"
-            step="0.0001" min="0" placeholder="0.00"
-            onchange="saveRate('${c}')">
-        </div>`).join('')}
-    </div>
-
-    <!-- ── ACCOUNT & SECURITY ─────────────────────────────── -->
-    <div class="settings-section-heading" style="margin-top:20px;">Account &amp; Security</div>
-
-    <!-- Download Data -->
-    ${currentUser !== 'demo' ? `
-    <div class="card">
-      <div class="card-title">Download Your Data</div>
-      <p style="color:var(--muted);font-size:14px;margin-bottom:14px;">Export all your income, expenses and net worth history as a CSV file for your records.</p>
-      <button class="btn btn-secondary" style="width:auto" onclick="exportCSV()">Download CSV</button>
-    </div>` : ''}
-
-    <!-- Password -->
-    <div class="card">
-      <div class="card-title">Password</div>
-      <p style="color:var(--muted);font-size:14px;margin-bottom:14px;">This password protects against casual access only. Data is stored unencrypted in your browser's local storage.</p>
-      ${currentUser === 'demo'
-        ? `<p style="color:var(--muted)">Password settings are not available in the Demo Account.</p>`
-        : `<div class="form-group">
-             <label class="form-label">Current Password</label>
-             <input type="password" class="form-input" id="pw-old" placeholder="Current password">
-           </div>
-           <div class="form-group">
-             <label class="form-label">New Password</label>
-             <input type="password" class="form-input" id="pw-new" placeholder="New password">
-           </div>
-           <button class="btn btn-primary" style="width:auto" onclick="changePassword()">Change Password</button>`
-      }
-    </div>
-
-    <!-- This Account -->
-    ${currentUser === 'demo' ? `
+      <!-- Accounts -->
       <div class="card">
-        <div class="card-title">Demo Account</div>
-        <p style="color:var(--muted);margin-bottom:14px;">Restore all demo data to the original sample.</p>
-        <button class="btn btn-danger" style="width:auto" onclick="resetDemo(false)">Reset Demo Data</button>
-      </div>` : `
-      <div class="card">
-        <div class="card-title">This Account</div>
-        <div class="form-group">
-          <label class="form-label">Account Name</label>
-          <div style="display:flex;gap:10px;align-items:center;">
-            <span style="font-size:17px;font-weight:500;">${esc((getProfiles().find(p=>p.id===currentUser)||{}).name||'')}</span>
-            <button class="btn btn-sm btn-outline" onclick="renameProfile()">Rename</button>
-          </div>
+        <div class="card-title">
+          Accounts
+          <button class="btn btn-success btn-sm" onclick="addAccount()">+ Add Account</button>
         </div>
-        <div class="separator"></div>
-        <p style="color:var(--muted);font-size:14px;margin-bottom:12px;">Permanently delete this account and all its data.</p>
-        <button class="btn btn-danger" style="width:auto" onclick="deleteProfile()">Delete This Account</button>
-      </div>`}
-  `;
+        <p style="color:var(--muted);font-size:14px;margin-bottom:14px;">Tracked in Net Worth. Add every bank account, savings, or investment account you want to follow.</p>
+        ${data.accounts.length === 0
+          ? `<div class="empty" style="padding:20px">No accounts yet.</div>`
+          : data.accounts.map((a, i) => `
+            <div class="si">
+              <div class="si-move">
+                <button class="btn btn-icon btn-outline" onclick="moveAccount('${a.id}',-1)" ${i === 0 ? 'disabled' : ''} title="Move up">&#9650;</button>
+                <button class="btn btn-icon btn-outline" onclick="moveAccount('${a.id}', 1)" ${i === data.accounts.length-1 ? 'disabled' : ''} title="Move down">&#9660;</button>
+              </div>
+              <div class="si-info">
+                <div class="si-name">${esc(a.name)}</div>
+                <div class="si-sub">${a.currency}</div>
+              </div>
+              <div class="si-actions">
+                <button class="btn btn-sm btn-outline" onclick="editAccount('${a.id}')">Edit</button>
+                <button class="btn btn-sm btn-danger"  onclick="delAccount('${a.id}')">Delete</button>
+              </div>
+            </div>`).join('')}
+      </div>
+
+      <!-- Income Sources -->
+      <div class="card">
+        <div class="card-title">
+          Income Sources
+          <button class="btn btn-success btn-sm" onclick="addIncomeSource()">+ Add Source</button>
+        </div>
+        <p style="color:var(--muted);font-size:14px;margin-bottom:14px;">Named income streams shown in Monthly Overview. Not tied to accounts — no net worth tracking.</p>
+        ${(data.incomeSources||[]).length === 0
+          ? `<div class="empty" style="padding:20px">No income sources yet.</div>`
+          : (data.incomeSources||[]).map((s, i) => `
+            <div class="si">
+              <div class="si-move">
+                <button class="btn btn-icon btn-outline" onclick="moveIncomeSource('${s.id}',-1)" ${i === 0 ? 'disabled' : ''} title="Move up">&#9650;</button>
+                <button class="btn btn-icon btn-outline" onclick="moveIncomeSource('${s.id}', 1)" ${i === (data.incomeSources.length-1) ? 'disabled' : ''} title="Move down">&#9660;</button>
+              </div>
+              <div class="si-info">
+                <div class="si-name">${esc(s.name)}</div>
+                <div class="si-sub">${s.currency}</div>
+              </div>
+              <div class="si-actions">
+                <button class="btn btn-sm btn-outline" onclick="editIncomeSource('${s.id}')">Edit</button>
+                <button class="btn btn-sm btn-danger"  onclick="delIncomeSource('${s.id}')">Delete</button>
+              </div>
+            </div>`).join('')}
+      </div>
+
+      <!-- Fixed Expenses -->
+      <div class="card" id="settings-fixed-expenses">
+        <div class="card-title">
+          Fixed Monthly Expenses
+          <button class="btn btn-success btn-sm" onclick="addFixed()">+ Add</button>
+        </div>
+        <p style="color:var(--muted);font-size:14px;margin-bottom:14px;">Recurring costs that apply automatically every month — rent, subscriptions, loans, etc.</p>
+        ${data.fixedExpenses.length === 0
+          ? `<div class="empty" style="padding:20px">No fixed expenses yet.</div>`
+          : data.fixedExpenses.map(f => `
+            <div class="si">
+              <div class="si-info">
+                <div class="si-name">${esc(f.name)}</div>
+                <div class="si-sub">${fmtC(f.amount,f.currency)} &middot; ${esc(f.category)}</div>
+              </div>
+              <div class="si-actions">
+                <button class="btn btn-sm btn-outline" onclick="editFixed('${f.id}')">Edit</button>
+                <button class="btn btn-sm btn-danger"  onclick="delFixed('${f.id}')">Delete</button>
+              </div>
+            </div>`).join('')}
+      </div>
+
+      <!-- Expense Categories -->
+      <div class="card">
+        <div class="card-title">
+          Expense Categories
+          <button class="btn btn-success btn-sm" onclick="addCategory()">+ Add</button>
+        </div>
+        <p style="color:var(--muted);font-size:14px;margin-bottom:14px;">Labels used when logging variable expenses. Remove or add to match your lifestyle.</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          ${(data.categories||[]).map(c => `
+            <div class="chip">
+              ${esc(c)}
+              <button class="chip-del" onclick="delCategory('${esc(c)}')" title="Remove">&times;</button>
+            </div>`).join('')}
+        </div>
+      </div>
+
+      <!-- Currency / Preferences -->
+      <div class="card">
+        <div class="card-title">Currency &amp; Preferences</div>
+        <div class="form-group">
+          <label class="form-label">Base Currency (all totals shown in this currency)</label>
+          <select class="form-select" id="sel-base" onchange="saveBase()">
+            ${CURRENCIES.map(c=>`<option value="${c}" ${c===base?'selected':''}>${c}</option>`).join('')}
+          </select>
+        </div>
+        <p class="form-label" style="margin-bottom:10px;">Exchange rates — how many PLN equals 1 unit of:</p>
+        ${['EUR','USD','DKK'].map(c => `
+          <div class="form-group">
+            <label class="form-label">1 ${c} = ? PLN</label>
+            <input type="number" class="form-input" id="rate-${c}"
+              value="${(data.exchangeRates||{})[c]||''}"
+              step="0.0001" min="0" placeholder="0.00"
+              onchange="saveRate('${c}')">
+          </div>`).join('')}
+      </div>`;
+
+  } else {
+
+    el.innerHTML = `
+
+      <!-- Download Data -->
+      ${currentUser !== 'demo' ? `
+      <div class="card">
+        <div class="card-title">Download Your Data</div>
+        <p style="color:var(--muted);font-size:14px;margin-bottom:14px;">Export all your income, expenses and net worth history as a CSV file for your records.</p>
+        <button class="btn btn-secondary" style="width:auto" onclick="exportCSV()">Download CSV</button>
+      </div>` : ''}
+
+      <!-- Password -->
+      <div class="card">
+        <div class="card-title">Password</div>
+        <p style="color:var(--muted);font-size:14px;margin-bottom:14px;">This password protects against casual access only. Data is stored unencrypted in your browser's local storage.</p>
+        ${currentUser === 'demo'
+          ? `<p style="color:var(--muted)">Password settings are not available in the Demo Account.</p>`
+          : `<div class="form-group">
+               <label class="form-label">Current Password</label>
+               <input type="password" class="form-input" id="pw-old" placeholder="Current password">
+             </div>
+             <div class="form-group">
+               <label class="form-label">New Password</label>
+               <input type="password" class="form-input" id="pw-new" placeholder="New password">
+             </div>
+             <button class="btn btn-primary" style="width:auto" onclick="changePassword()">Change Password</button>`
+        }
+      </div>
+
+      <!-- This Account -->
+      ${currentUser === 'demo' ? `
+        <div class="card">
+          <div class="card-title">Demo Account</div>
+          <p style="color:var(--muted);margin-bottom:14px;">Restore all demo data to the original sample.</p>
+          <button class="btn btn-danger" style="width:auto" onclick="resetDemo(false)">Reset Demo Data</button>
+        </div>` : `
+        <div class="card">
+          <div class="card-title">This Account</div>
+          <div class="form-group">
+            <label class="form-label">Account Name</label>
+            <div style="display:flex;gap:10px;align-items:center;">
+              <span style="font-size:17px;font-weight:500;">${esc((getProfiles().find(p=>p.id===currentUser)||{}).name||'')}</span>
+              <button class="btn btn-sm btn-outline" onclick="renameProfile()">Rename</button>
+            </div>
+          </div>
+          <div class="separator"></div>
+          <p style="color:var(--muted);font-size:14px;margin-bottom:12px;">Permanently delete this account and all its data.</p>
+          <button class="btn btn-danger" style="width:auto" onclick="deleteProfile()">Delete This Account</button>
+        </div>`}
+    `;
+  }
 }
 
 function saveBase() {
