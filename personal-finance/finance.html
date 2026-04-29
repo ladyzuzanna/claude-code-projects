@@ -419,6 +419,28 @@ tr:hover td { background: #FAFAFA; }
 }
 .chip-del:hover { color: var(--red); }
 
+/* ── INNER TABS (History sub-tabs) ── */
+.inner-tabs {
+  display: flex;
+  border-bottom: 2px solid var(--border);
+  margin-bottom: 20px;
+}
+.inner-tab {
+  padding: 10px 18px;
+  border: none;
+  background: none;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--muted);
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  font-family: inherit;
+  transition: color 0.15s;
+}
+.inner-tab:hover { color: var(--text); }
+.inner-tab.active { color: var(--blue); border-bottom-color: var(--blue); }
+
 /* ── RESPONSIVE ── */
 @media (max-width: 600px) {
   .balance-amount { font-size: 34px; }
@@ -491,6 +513,8 @@ let currentUser  = null;  // 'demo' | profileId | 'combined'
 let currentTab   = 'overview';
 let currentMonth = ymNow();
 let nwChart      = null;
+let ovChart      = null;
+let historyTab   = 'monthly';
 
 // ════════════════════════════════════════════════════════════
 // DATE HELPERS
@@ -842,6 +866,7 @@ function showApp() {
 // TAB MANAGEMENT
 // ════════════════════════════════════════════════════════════
 function switchTab(tab) {
+  if (tab !== 'overview' && ovChart) { ovChart.destroy(); ovChart = null; }
   currentTab = tab;
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
@@ -962,10 +987,13 @@ function renderOverview() {
     <div class="card">
       <div class="card-title">
         Fixed Expenses
-        <span style="font-size:15px;font-weight:400;color:var(--muted)">Total: <strong class="amt-neg">${fmtC(cur.fixed,base)}</strong></span>
+        <span style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+          <span style="font-size:15px;font-weight:400;color:var(--muted)">Total: <strong class="amt-neg">${fmtC(cur.fixed,base)}</strong></span>
+          <button class="btn btn-sm btn-outline" onclick="goToFixedSettings()">Manage &#8599;</button>
+        </span>
       </div>
       ${data.fixedExpenses.length === 0
-        ? `<div class="empty">No fixed expenses — add them in Settings.</div>`
+        ? `<div class="empty">No fixed expenses — <button class="btn btn-sm btn-outline" onclick="goToFixedSettings()" style="margin-left:4px;">add them in Settings</button></div>`
         : `<div class="tbl-wrap"><table>
             <thead><tr><th>Name</th><th>Category</th><th class="td-r">Amount</th><th class="td-r">In ${base}</th></tr></thead>
             <tbody>
@@ -1021,9 +1049,65 @@ function renderOverview() {
           </table></div>`
       }
     </div>`;
+
+  // Trend chart — last 6 months with data
+  const allYMs = Object.keys(data.monthlyData||{}).sort();
+  const chartYMs = allYMs.filter(ym => {
+    const c = calcMonth(data, ym);
+    return c.income > 0 || c.expenses > 0;
+  }).slice(-6);
+
+  if (chartYMs.length >= 2) {
+    const labels  = chartYMs.map(ym => { const [y,m]=ym.split('-'); return `${MONTH_NAMES[+m-1].slice(0,3)} ${y}`; });
+    const incomes   = chartYMs.map(ym => +calcMonth(data, ym).income.toFixed(2));
+    const expenses  = chartYMs.map(ym => +calcMonth(data, ym).expenses.toFixed(2));
+    const surpluses = chartYMs.map(ym => +calcMonth(data, ym).surplus.toFixed(2));
+
+    const pg2 = document.getElementById('pg-overview');
+    pg2.insertAdjacentHTML('beforeend', `
+      <div class="card">
+        <div class="card-title">Trend — Last ${chartYMs.length} Months</div>
+        <div class="chart-box"><canvas id="ov-canvas"></canvas></div>
+      </div>`);
+
+    if (ovChart) { ovChart.destroy(); ovChart = null; }
+    ovChart = new Chart(document.getElementById('ov-canvas'), {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
+          { label: 'Income',   data: incomes,   backgroundColor: 'rgba(22,163,74,0.7)',  borderRadius: 4 },
+          { label: 'Expenses', data: expenses,  backgroundColor: 'rgba(220,38,38,0.7)',  borderRadius: 4 },
+          { label: 'Surplus',  data: surpluses, type: 'line',
+            borderColor: '#2563EB', backgroundColor: 'rgba(37,99,235,0.08)',
+            borderWidth: 2.5, pointRadius: 4, pointBackgroundColor: '#2563EB', fill: true, tension: 0.3,
+            yAxisID: 'y' }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { display: true, position: 'bottom' },
+          tooltip: { callbacks: { label: c => `${c.dataset.label}: ${fmt(c.parsed.y)} ${base}` } }
+        },
+        scales: {
+          y: { ticks: { callback: v => fmt(v), font:{size:12} }, grid:{color:'#E5E7EB'} },
+          x: { ticks: { font:{size:12} }, grid:{display:false} }
+        }
+      }
+    });
+  }
 }
 
 function goOv(d) { currentMonth = d<0 ? prevYM(currentMonth) : nextYM(currentMonth); renderOverview(); }
+
+function goToFixedSettings() {
+  switchTab('settings');
+  setTimeout(() => {
+    const el = document.getElementById('settings-fixed-expenses');
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, 60);
+}
 
 // ════════════════════════════════════════════════════════════
 // NET WORTH TAB
@@ -1097,7 +1181,7 @@ function renderNetWorth() {
       }
     </div>
 
-    ${allYMs.length > 1 ? `
+    ${allYMs.length >= 1 ? `
       <div class="card">
         <div class="card-title">Net Worth Over Time</div>
         <div class="chart-box"><canvas id="nw-canvas"></canvas></div>
@@ -1184,65 +1268,111 @@ function editNetWorth() {
 // ════════════════════════════════════════════════════════════
 function renderHistory() {
   if (currentUser === 'combined') { renderCombinedHistory(); return; }
+  const pg = document.getElementById('pg-history');
+  pg.innerHTML = `
+    <div class="inner-tabs">
+      <button class="inner-tab ${historyTab==='monthly'?'active':''}" onclick="switchHistoryTab('monthly')">Monthly History</button>
+      <button class="inner-tab ${historyTab==='networth'?'active':''}" onclick="switchHistoryTab('networth')">Net Worth History</button>
+    </div>
+    <div id="history-content"></div>`;
+  renderHistoryContent();
+}
+
+function switchHistoryTab(tab) {
+  historyTab = tab;
+  document.querySelectorAll('.inner-tab').forEach(b => b.classList.toggle('active', b.textContent.toLowerCase().startsWith(tab==='monthly'?'monthly':'net')));
+  renderHistoryContent();
+}
+
+function renderHistoryContent() {
   const data = getData();
   const base = data.baseCurrency || 'PLN';
-  const yms  = Object.keys(data.monthlyData||{}).sort().reverse();
+  const el   = document.getElementById('history-content');
+  if (!el) return;
 
-  const pg = document.getElementById('pg-history');
+  if (historyTab === 'monthly') {
+    const yms = Object.keys(data.monthlyData||{}).sort().reverse();
+    if (yms.length === 0) {
+      el.innerHTML = `<div class="card"><div class="empty" style="padding:48px">No history yet. Start adding income and expenses in Monthly Overview.</div></div>`;
+      return;
+    }
+    const rows = yms.map(ym => {
+      const c = calcMonth(data, ym);
+      const p = data.monthlyData[prevYM(ym)] ? calcMonth(data, prevYM(ym)) : null;
+      return { ym, ...c, prev: p };
+    });
+    el.innerHTML = `
+      <div class="card">
+        <div class="tbl-wrap"><table>
+          <thead><tr><th>Month</th><th class="td-r">Income</th><th class="td-r">Expenses</th><th class="td-r">Surplus</th><th></th></tr></thead>
+          <tbody>
+            ${rows.map(r => {
+              const dI = r.prev ? r.income   - r.prev.income   : null;
+              const dE = r.prev ? r.expenses - r.prev.expenses : null;
+              const dS = r.prev ? r.surplus  - r.prev.surplus  : null;
+              return `<tr>
+                <td><strong>${fmtMonth(r.ym)}</strong></td>
+                <td class="td-r">
+                  <div class="amt amt-pos">${fmt(r.income)}</div>
+                  ${dI!==null?`<div class="diff ${dI>=0?'pos':'neg'}">${fmtDiff(dI,'')}</div>`:''}
+                </td>
+                <td class="td-r">
+                  <div class="amt amt-neg">${fmt(r.expenses)}</div>
+                  ${dE!==null?`<div class="diff ${dE<=0?'pos':'neg'}">${fmtDiff(dE,'')}</div>`:''}
+                </td>
+                <td class="td-r">
+                  <div class="amt ${r.surplus>=0?'amt-pos':'amt-neg'}">${fmt(r.surplus)}</div>
+                  ${dS!==null?`<div class="diff ${dS>=0?'pos':'neg'}">${fmtDiff(dS,'')}</div>`:''}
+                </td>
+                <td class="td-r"><button class="btn btn-sm btn-outline" onclick="jumpMonth('${r.ym}')">View</button></td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table></div>
+      </div>`;
 
-  if (yms.length === 0) {
-    pg.innerHTML = `<div class="card"><div class="empty" style="padding:48px">
-      No history yet. Start adding income and expenses in Monthly Overview.
-    </div></div>`;
-    return;
+  } else {
+    // Net Worth History
+    const nwYMs = Object.keys(data.monthlyData||{})
+      .filter(ym => { const s = data.monthlyData[ym]; return s && s.netWorth && Object.keys(s.netWorth).length > 0; })
+      .sort().reverse();
+
+    if (nwYMs.length === 0) {
+      el.innerHTML = `<div class="card"><div class="empty" style="padding:48px">No net worth data yet. Log balances in the Net Worth tab.</div></div>`;
+      return;
+    }
+
+    const accs = data.accounts || [];
+    el.innerHTML = `
+      <div class="card">
+        <div class="tbl-wrap"><table>
+          <thead><tr>
+            <th>Month</th>
+            ${accs.map(a=>`<th class="td-r">${esc(a.name)}<br><span style="font-weight:400;font-size:12px">${a.currency}</span></th>`).join('')}
+            <th class="td-r">Total (${base})</th>
+          </tr></thead>
+          <tbody>
+            ${nwYMs.map(ym => {
+              const s    = data.monthlyData[ym];
+              const nw   = s.netWorth || {};
+              const prev = data.monthlyData[prevYM(ym)];
+              const prevNW = prev && prev.netWorth ? prev.netWorth : null;
+              const total = accs.reduce((sum,a)=>sum+toBase(parseFloat(nw[a.id]||0),a.currency,data),0);
+              const prevTotal = prevNW ? accs.reduce((sum,a)=>sum+toBase(parseFloat(prevNW[a.id]||0),a.currency,data),0) : null;
+              const dt = prevTotal !== null ? total - prevTotal : null;
+              return `<tr>
+                <td><strong>${fmtMonth(ym)}</strong></td>
+                ${accs.map(a=>`<td class="td-r amt">${fmt(parseFloat(nw[a.id]||0))}</td>`).join('')}
+                <td class="td-r">
+                  <div class="amt amt-pos">${fmt(total)}</div>
+                  ${dt!==null?`<div class="diff ${dt>=0?'pos':'neg'}">${fmtDiff(dt,'')}</div>`:''}
+                </td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table></div>
+      </div>`;
   }
-
-  const rows = yms.map(ym => {
-    const c = calcMonth(data, ym);
-    const pym = prevYM(ym);
-    const hasPrev = data.monthlyData && data.monthlyData[pym];
-    const p = hasPrev ? calcMonth(data, pym) : null;
-    return { ym, ...c, prev: p };
-  });
-
-  pg.innerHTML = `
-    <div class="card">
-      <div class="card-title">Monthly History</div>
-      <div class="tbl-wrap"><table>
-        <thead><tr>
-          <th>Month</th>
-          <th class="td-r">Income</th>
-          <th class="td-r">Expenses</th>
-          <th class="td-r">Surplus</th>
-          <th></th>
-        </tr></thead>
-        <tbody>
-          ${rows.map(r => {
-            const dI = r.prev ? r.income   - r.prev.income   : null;
-            const dE = r.prev ? r.expenses - r.prev.expenses : null;
-            const dS = r.prev ? r.surplus  - r.prev.surplus  : null;
-            return `<tr>
-              <td><strong>${fmtMonth(r.ym)}</strong></td>
-              <td class="td-r">
-                <div class="amt amt-pos">${fmt(r.income)}</div>
-                ${dI!==null ? `<div class="diff ${dI>=0?'pos':'neg'}">${fmtDiff(dI,'')}</div>` : ''}
-              </td>
-              <td class="td-r">
-                <div class="amt amt-neg">${fmt(r.expenses)}</div>
-                ${dE!==null ? `<div class="diff ${dE<=0?'pos':'neg'}">${fmtDiff(dE,'')}</div>` : ''}
-              </td>
-              <td class="td-r">
-                <div class="amt ${r.surplus>=0?'amt-pos':'amt-neg'}">${fmt(r.surplus)}</div>
-                ${dS!==null ? `<div class="diff ${dS>=0?'pos':'neg'}">${fmtDiff(dS,'')}</div>` : ''}
-              </td>
-              <td class="td-r">
-                <button class="btn btn-sm btn-outline" onclick="jumpMonth('${r.ym}')">View</button>
-              </td>
-            </tr>`;
-          }).join('')}
-        </tbody>
-      </table></div>
-    </div>`;
 }
 
 function jumpMonth(ym) { currentMonth = ym; switchTab('overview'); }
@@ -1309,7 +1439,7 @@ function renderSettings() {
     </div>
 
     <!-- Fixed Expenses -->
-    <div class="card">
+    <div class="card" id="settings-fixed-expenses">
       <div class="card-title">
         Fixed Monthly Expenses
         <button class="btn btn-success btn-sm" onclick="addFixed()">+ Add</button>
@@ -1363,21 +1493,6 @@ function renderSettings() {
             step="0.0001" min="0" placeholder="0.00"
             onchange="saveRate('${c}')">
         </div>`).join('')}
-    </div>
-
-    <!-- Import / Export -->
-    <div class="card">
-      <div class="card-title">Import / Export</div>
-      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px;">
-        <button class="btn btn-outline" onclick="exportCSV()">&#11015; Export CSV</button>
-        <button class="btn btn-outline" onclick="document.getElementById('csv-file').click()">&#11014; Import CSV</button>
-        <input type="file" id="csv-file" accept=".csv" style="display:none" onchange="importCSV(event)">
-      </div>
-      <div class="note"><strong>CSV format</strong> — export includes all data. Import adds to existing data (does not replace).</div>
-      <div class="form-label" style="margin-top:10px">Variable expense template:</div>
-      <div class="csv-pre">month,name,category,amount,currency,date
-2025-01,Groceries,Food,450.00,PLN,2025-01-05
-2025-02,Bus pass,Transport,110.00,PLN,2025-02-01</div>
     </div>
 
     <!-- Password -->
