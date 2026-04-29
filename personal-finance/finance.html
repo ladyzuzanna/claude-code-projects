@@ -2068,11 +2068,25 @@ function renameProfile() {
 
 function deleteProfile() {
   const p = getProfiles().find(p => p.id === currentUser);
-  if (!confirm(`Delete "${p ? p.name : 'this account'}" and all its data? This cannot be undone.`)) return;
-  const profiles = getProfiles().filter(p => p.id !== currentUser);
-  saveProfiles(profiles);
-  localStorage.removeItem(profileKey(currentUser));
-  logout();
+  const name = p ? p.name : 'this account';
+  openModal('Delete Account', `
+    <p style="font-size:17px;margin-bottom:12px;">
+      Are you sure you want to delete <strong>${esc(name)}</strong>?
+    </p>
+    <div style="background:var(--red-light);border:1px solid #FECACA;border-radius:8px;padding:12px 14px;font-size:15px;color:#7F1D1D;">
+      All income, expenses, net worth data and settings will be permanently deleted.
+      This cannot be undone.
+    </div>`,
+  [
+    { label: 'Cancel — keep my account', cls: 'btn-secondary', fn: closeModal },
+    { label: 'Yes, delete permanently',  cls: 'btn-danger',    fn: () => {
+      const profiles = getProfiles().filter(p => p.id !== currentUser);
+      saveProfiles(profiles);
+      localStorage.removeItem(profileKey(currentUser));
+      closeModal();
+      logout();
+    }}
+  ]);
 }
 
 // ════════════════════════════════════════════════════════════
