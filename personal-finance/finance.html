@@ -550,6 +550,20 @@ function nextYM(ym) {
   return `${d.getFullYear()}-${pad(d.getMonth()+1)}`;
 }
 
+function lastDayOfMonth(ym) {
+  const [y,m] = ym.split('-').map(Number);
+  return new Date(y, m, 0).getDate();
+}
+
+function todayISO() {
+  const d = new Date();
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+}
+
+function dateToYM(dateStr) {
+  return dateStr ? dateStr.substring(0, 7) : currentMonth;
+}
+
 function relYM(monthsAgo) {
   const d = new Date();
   const nd = new Date(d.getFullYear(), d.getMonth() - monthsAgo, 1);
@@ -1650,23 +1664,28 @@ function editIncome(id) {
   const source = data.accounts.find(a=>a.id===id) || (data.incomeSources||[]).find(s=>s.id===id);
   if (!source) return;
   const cur = parseFloat(monthSlot(data, currentMonth).income[id]||0);
+  const defaultDate = `${currentMonth}-${pad(lastDayOfMonth(currentMonth))}`;
 
   openModal(`Income — ${esc(source.name)}`, `
-    <p style="color:var(--muted);font-size:15px;margin-bottom:16px;">
-      Amount from <strong>${esc(source.name)}</strong> in ${fmtMonth(currentMonth)}.
-    </p>
     <div class="form-group">
       <label class="form-label">Amount (${source.currency})</label>
       <input type="number" class="form-input" id="inc-amt" value="${cur}" step="0.01" min="0" placeholder="0.00">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Date received</label>
+      <input type="date" class="form-input" id="inc-date" value="${defaultDate}">
     </div>`,
   [
     { label: 'Cancel', cls: 'btn-secondary', fn: closeModal },
     { label: 'Save',   cls: 'btn-primary',   fn: () => {
-      const v = parseFloat(document.getElementById('inc-amt').value);
-      const d = getData();
-      monthSlot(d, currentMonth).income[id] = isNaN(v) ? 0 : v;
+      const v  = parseFloat(document.getElementById('inc-amt').value);
+      const dt = document.getElementById('inc-date').value;
+      const ym = dateToYM(dt);
+      const d  = getData();
+      monthSlot(d, ym).income[id] = isNaN(v) ? 0 : v;
       saveData(d);
       closeModal();
+      currentMonth = ym;
       renderOverview();
     }}
   ]);
@@ -1706,7 +1725,7 @@ function addVarExpense() {
       </div>
       <div class="form-group">
         <label class="form-label">Date</label>
-        <input type="date" class="form-input" id="ve-date" value="${currentMonth}-01">
+        <input type="date" class="form-input" id="ve-date" value="${todayISO()}">
       </div>
     </div>`,
   [
@@ -1719,10 +1738,12 @@ function addVarExpense() {
       const date = document.getElementById('ve-date').value;
       if (!name) { alert('Please enter a name.'); return; }
       if (!isFinite(amt) || amt <= 0) { alert('Please enter a valid amount.'); return; }
-      const d = getData();
-      monthSlot(d, currentMonth).variableExpenses.push({ id: uid(), name, category: cat, amount: amt, currency: cur, date });
+      const ym = dateToYM(date);
+      const d  = getData();
+      monthSlot(d, ym).variableExpenses.push({ id: uid(), name, category: cat, amount: amt, currency: cur, date });
       saveData(d);
       closeModal();
+      currentMonth = ym;
       renderOverview();
     }}
   ]);
