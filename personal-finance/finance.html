@@ -987,11 +987,11 @@ function renderOverview() {
     <!-- Fixed Expenses -->
     <div class="card">
       <div class="card-title">
-        Fixed Expenses
-        <span style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-          <span style="font-size:15px;font-weight:400;color:var(--muted)">Total: <strong class="amt-neg">${fmtC(cur.fixed,base)}</strong></span>
+        <span style="display:flex;align-items:center;gap:10px;">
+          Fixed Expenses
           <button class="btn btn-sm btn-outline" onclick="goToFixedSettings()">Manage &#8599;</button>
         </span>
+        <span style="font-size:15px;font-weight:400;color:var(--muted)">Total: <strong class="amt-neg">${fmtC(cur.fixed,base)}</strong></span>
       </div>
       ${data.fixedExpenses.length === 0
         ? `<div class="empty">No fixed expenses — <button class="btn btn-sm btn-outline" onclick="goToFixedSettings()" style="margin-left:4px;">add them in Settings</button></div>`
